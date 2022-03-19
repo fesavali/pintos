@@ -55,17 +55,22 @@ usage()
 
   Usage: $0 [options] [DEST_DIR] [TOOL]
 
-    -h: display this message
+    -h, --help           Display this message
 
-    DEST_DIR: Base directory to store the downloeaded source code, build and 
-              distribute the compiled toolchain.
-    TOOL:     By default, this script build three targets: binutils, GCC, and GDB. 
-              Specify a single target to download and build. Must be one of
-              {binutils, gcc, gdb}.
+    -p, --prefix PATH    Install the executables to PATH, instead of the default
+                         DEST_DIR/dist
+
+    DEST_DIR             Base directory to store the downloeaded source code,
+                         build and distribute the compiled toolchain.
+
+    TOOL                 By default, this script build three targets: binutils,
+                         GCC, and GDB. Specify a single target to download and build.
+                         Must be one of {binutils, gcc, gdb}.
 
   Example:
     1. $0 /home/ryan/318/toolchain
     2. $0 /home/ryan/318/toolchain gcc
+    3. $0 --prefix /usr/local /home/ryan/318/toolchain gdb
 
 EOF
 }
@@ -75,11 +80,35 @@ if [ $# -eq 0 ]; then
   exit 1
 fi
 
-if [ "$1" == "-h" -o "$1" == "--help" ]; then
-  usage
-  exit 0
-fi
-
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+PREFIX=
+ARGS=""
+while (( "$#" )); do
+  case "$1" in
+    -p|--prefix)
+      if [ -n "$2" ] && [ ${2:0:1} != "-" ]; then
+        PREFIX=$2
+        shift 2
+      else
+        echo "Error: Prefix argument is missing" >&2
+        exit 1
+      fi
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    -*|--*=)
+      echo "Error: Unsupported flag $1" >&2
+      exit 1
+      ;;
+    *)
+      ARGS="$ARGS $1"
+      shift
+      ;;
+  esac
+done
+eval set -- "$ARGS"
 tool=all
 if [ $# -eq 2 ]; then
   tool=$(echo "$2" | tr '[:upper:]' '[:lower:]')
@@ -94,7 +123,15 @@ dist="`uname -m`"
 mkdir -p $1/{src,$dist,build} || perror "Failed to create toolchain source and build directories"
 
 CWD=$(cd $1 && pwd)
-PREFIX=$CWD/$dist
+if [ -z "$PREFIX" ]; then
+  # if prefix is not set, we use the dist dir as the default prefix
+  PREFIX=$CWD/$dist
+else
+  if [[ $PREFIX != /* ]]; then
+    echo "Prefix must be an absolute path, got '$PREFIX'"
+    exit 1
+  fi
+fi
 export PATH=$PREFIX/bin:$PATH
 if [ $os == "Linux" ]; then
   export LD_LIBRARY_PATH=$PREFIX/lib:$LD_LIBRARY_PATH
@@ -115,6 +152,10 @@ if [ $tool == "all" -o $tool == "gcc" ]; then
   if [ ! -d $CWD/src/gcc-6.2.0/mpfr ]; then
     cd $CWD/src/gcc-6.2.0 && contrib/download_prerequisites || perror "Failed to download pre-requisite for GCC"
   fi
+  echo "Patching GCC..."
+  pushd $CWD/src/gcc-6.2.0
+  cat $SCRIPT_DIR/gcc-6.2.0-ubsan.patch | patch -p2
+  popd
 fi
 if [ $tool == "all" -o $tool == "gdb" ]; then
   download_and_check https://ftp.gnu.org/gnu/gdb/gdb-7.9.1.tar.xz cd9c543a411a05b2b647dd38936034b68c2b5d6f10e0d51dc168c166c973ba40
@@ -132,7 +173,7 @@ fi
 if [ $tool == "all" -o $tool == "gcc" ]; then
   echo "Building GCC..."
   mkdir -p $CWD/build/gcc && cd $CWD/build/gcc 
-  ../../src/gcc-6.2.0/configure --prefix=$PREFIX --target=$TARGET \
+  ../../src/gcc-6.2.0/configure CXXFLAGS="-fpermissive" --prefix=$PREFIX --target=$TARGET \
     --disable-multilib --disable-nls --disable-werror --disable-libssp \
     --disable-libmudflap --with-newlib --without-headers --enable-languages=c,c++ || perror "Failed to configure gcc"
   make -j8 all-gcc  || perror "Failed to make gcc"
@@ -149,10 +190,10 @@ if [ $tool == "all" -o $tool == "gdb" ]; then
   make install
 fi
 
-echo "*********************************************************"
-echo "*                                                       *"
-echo "* Congratulations! You've built the cross-compiler      *"
-echo "* Don't forget to add the following to .bashrc          *"
-echo "* export PATH=$PREFIX/bin:\$PATH                        *"
-echo "*                                                       *"
-echo "*********************************************************"
+echo "************************************************************"
+echo "*                                                          *"
+echo "* Congratulations! You've built the cross-compiler!        *"
+echo "* Don't forget to add the following to .bashrc or .zshrc:  *"
+echo "* export PATH=$PREFIX/bin:\$PATH                           *"
+echo "*                                                          *"
+echo "************************************************************"
