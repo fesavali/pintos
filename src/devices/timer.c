@@ -100,13 +100,13 @@ timer_sleep (int64_t ticks)
 
   old_level = intr_disable ();
 
-  /* Get current thread and set wakeup ticks. */
+  /* Get cu thread and set wakeup ticks. */
   cur_thread = thread_current ();
   cur_thread->wakeup_ticks = timer_ticks () + ticks;
 
-  /* Insert current thread to ordered sleeping list */
+  /* Insert to ordered sleeping list */
   list_insert_ordered (&sleeping_list, &cur_thread->elem,
-                       thread_wakeup_ticks_less, NULL);// turning on intrupts
+                       thread_wakeup_ticks_less, NULL);
   thread_block ();
 
   intr_set_level (old_level);

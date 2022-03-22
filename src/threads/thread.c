@@ -209,12 +209,7 @@ thread_create (const char *name, int priority,
   return tid;
 }
 
-/* Puts the current thread to sleep.  It will not be scheduled
-   again until awoken by thread_unblock().
 
-   This function must be called with interrupts turned off.  It
-   is usually a better idea to use one of the synchronization
-   primitives in synch.h. */
 void
 thread_block (void) 
 {
@@ -225,14 +220,6 @@ thread_block (void)
   schedule ();
 }
 
-/* Transitions a blocked thread T to the ready-to-run state.
-   This is an error if T is not blocked.  (Use thread_yield() to
-   make the running thread ready.)
-
-   This function does not preempt the running thread.  This can
-   be important: if the caller had disabled interrupts itself,
-   it may expect that it can atomically unblock a thread and
-   update other data. */
 void
 thread_unblock (struct thread *t) 
 {
@@ -319,8 +306,6 @@ thread_yield (void)
   intr_set_level (old_level);
 }
 
-/* Invoke function 'func' on all threads, passing along 'aux'.
-   This function must be called with interrupts off. */
 void
 thread_foreach (thread_action_func *func, void *aux)
 {
